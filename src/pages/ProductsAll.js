@@ -33,8 +33,15 @@ import {
 import response from "../utils/demo/productData";
 import Icon from "../components/Icon";
 import { genRating } from "../utils/genarateRating";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../firebase/firebaseConfig";
+
 
 const ProductsAll = () => {
+  const [products, setProducts] = useState([]);
+  const [filter, setFilter] = useState(products);
+  const [loading, setLoading] = useState(false);
+
   const [view, setView] = useState("grid");
 
   // Table and grid data handlling
@@ -43,18 +50,39 @@ const ProductsAll = () => {
 
   // pagination setup
   const [resultsPerPage, setResultsPerPage] = useState(10);
-  const totalResults = response.length;
+  const totalResults = products.length;
 
   // pagination change control
   function onPageChange(p) {
     setPage(p);
   }
 
+  useEffect(() => {
+    const getProducts = async () => {
+      setLoading(true);
+      try {
+        const querySnapshot = await getDocs(collection(db, "products"));
+        const productsArray = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setProducts(productsArray);
+        setFilter(productsArray);
+      } catch (error) {
+        console.error("Error fetching products:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    getProducts();
+  }, []);
+
   // on page change, load new sliced data
   // here you would make another server request for new data
   useEffect(() => {
-    setData(response.slice((page - 1) * resultsPerPage, page * resultsPerPage));
-  }, [page, resultsPerPage]);
+    setData(products.slice((page - 1) * resultsPerPage, page * resultsPerPage));
+  }, [page, resultsPerPage, totalResults]);
 
   // Delete action model
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -79,6 +107,8 @@ const ProductsAll = () => {
       setView("list");
     }
   };
+
+  console.log("data", data);
 
   return (
     <div>
@@ -275,22 +305,14 @@ const ProductsAll = () => {
                 <Card>
                   <img
                     className="object-cover w-full"
-                    src={product.photo}
+                    src={product.image}
                     alt="product"
                   />
                   <CardBody>
                     <div className="mb-3 flex items-center justify-between">
                       <p className="font-semibold truncate  text-gray-600 dark:text-gray-300">
-                        {product.name}
+                        {product.title}
                       </p>
-                      <Badge
-                        type={product.qty > 0 ? "success" : "danger"}
-                        className="whitespace-nowrap"
-                      >
-                        <p className="break-normal">
-                          {product.qty > 0 ? `In Stock` : "Out of Stock"}
-                        </p>
-                      </Badge>
                     </div>
 
                     <p className="mb-2 text-purple-500 font-bold text-lg">
