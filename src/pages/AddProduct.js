@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import Icon from "../components/Icon";
 import PageTitle from "../components/Typography/PageTitle";
-import { HomeIcon, PublishIcon, StoreIcon } from "../icons";
+import { HomeIcon, PublishIcon } from "../icons";
 import {
   Card,
   CardBody,
@@ -13,15 +13,14 @@ import {
   Select,
 } from "@windmill/react-ui";
 import { db } from "../firebase/firebaseConfig";
-import { collection, addDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, getDocs, collection, setDoc } from "firebase/firestore";
+import { useHistory } from "react-router-dom";
 
-const FormTitle = ({ children }) => {
-  return (
-      <h2 className="mb-3 text-sm font-semibold text-gray-600 dark:text-gray-300">
-        {children}
-      </h2>
-  );
-};
+const FormTitle = ({ children }) => (
+    <h2 className="mb-3 text-sm font-semibold text-gray-600 dark:text-gray-300">
+      {children}
+    </h2>
+);
 
 const AddProduct = () => {
   const [image, setImage] = useState("");
@@ -29,40 +28,93 @@ const AddProduct = () => {
   const [price, setPrice] = useState("");
   const [description, setDescription] = useState("");
   const [stock, setStock] = useState("");
-  const [category, setCategory] = useState("electronics");
+  const [category, setCategory] = useState();
+  const [categoryList, setCategoryList] = useState([]);
+  const [newCategory, setNewCategory] = useState("");
+
+  const history = useHistory();
 
   const handlePublish = async () => {
     try {
-      const docRef = await addDoc(collection(db, "products"), {
+      const finalCategory = newCategory.trim() !== "" ? newCategory.trim() : category;
+
+      if (!finalCategory) {
+        console.error("No category selected or added");
+        return;
+      }
+
+      const categoryDocRef = doc(db, "categories", finalCategory);
+      const categorySnap = await getDoc(categoryDocRef);
+
+      const newProduct = {
+        id: new Date().getTime(),
         image,
         title,
         price: parseFloat(price),
         description,
         stock: parseInt(stock),
-        category,
+        category: finalCategory,
         rating: {
           rate: 0,
           count: 0
         }
-      });
-      alert("Product added with ID: " + docRef.id);
+      };
+
+      let updatedProducts = [];
+
+      if (categorySnap.exists()) {
+        const categoryData = categorySnap.data();
+        const existingProducts = categoryData.products || [];
+        updatedProducts = [...existingProducts, newProduct];
+
+        await updateDoc(categoryDocRef, {
+          products: updatedProducts
+        });
+
+      } else {
+        updatedProducts = [newProduct];
+
+        await setDoc(categoryDocRef, {
+          name: finalCategory,
+          products: updatedProducts
+        });
+      }
+
       setImage("");
       setTitle("");
       setPrice("");
       setDescription("");
       setStock("");
-      setCategory("electronics");
+      setCategory("");
+      setNewCategory("");
+
+      history.push("/app/all-products");
+
     } catch (e) {
-      console.error("Error adding product: ", e);
-      alert("Error adding product.");
+      console.error("Error adding product to category field: ", e);
     }
   };
+
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "categories"));
+        const categories = querySnapshot.docs.map(doc => doc.id);
+        setCategoryList(categories);
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
+
 
   return (
       <div>
         <PageTitle>Add New Product</PageTitle>
-
-        {/* Breadcum */}
         <div className="flex text-gray-800 dark:text-gray-300">
           <div className="flex items-center text-purple-600">
             <Icon className="w-5 h-5" aria-hidden="true" icon={HomeIcon} />
@@ -73,7 +125,6 @@ const AddProduct = () => {
           {">"}
           <p className="mx-2">Add new Product</p>
         </div>
-
         <div className="w-full mt-8 grid gap-4 grid-col md:grid-cols-3 ">
           <Card className="row-span-2 md:col-span-2">
             <CardBody>
@@ -86,7 +137,6 @@ const AddProduct = () => {
                     onChange={(e) => setImage(e.target.value)}
                 />
               </Label>
-
               <FormTitle>Product Name</FormTitle>
               <Label>
                 <Input
@@ -96,7 +146,6 @@ const AddProduct = () => {
                     onChange={(e) => setTitle(e.target.value)}
                 />
               </Label>
-
               <FormTitle>Product Price</FormTitle>
               <Label>
                 <Input
@@ -106,7 +155,6 @@ const AddProduct = () => {
                     onChange={(e) => setPrice(e.target.value)}
                 />
               </Label>
-
               <FormTitle>Description</FormTitle>
               <Label>
                 <Textarea
@@ -117,7 +165,6 @@ const AddProduct = () => {
                     onChange={(e) => setDescription(e.target.value)}
                 />
               </Label>
-
               <FormTitle>Stock Quantity</FormTitle>
               <Label>
                 <Input
@@ -129,8 +176,7 @@ const AddProduct = () => {
               </Label>
             </CardBody>
           </Card>
-
-          <Card className="h-48">
+          <Card className="h-70">
             <CardBody>
               <div className="flex mb-8">
                 <Button
@@ -141,9 +187,6 @@ const AddProduct = () => {
                 >
                   Publish
                 </Button>
-                <Button layout="link" iconLeft={StoreIcon}>
-                  Save as Draft
-                </Button>
               </div>
               <Label className="mt-4">
                 <FormTitle>Select Product Category</FormTitle>
@@ -152,11 +195,21 @@ const AddProduct = () => {
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
                 >
-                  <option>electronics</option>
-                  <option>jewelery</option>
-                  <option>men's clothing</option>
-                  <option>women's clothing</option>
+                  <option value="">  ----  </option>
+                  {categoryList.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                  ))}
                 </Select>
+              </Label>
+              <Label className="mt-4">
+                <FormTitle>Add New Category</FormTitle>
+                <Input
+                    className="mt-1"
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                />
               </Label>
             </CardBody>
           </Card>

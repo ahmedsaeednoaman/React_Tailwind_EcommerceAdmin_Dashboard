@@ -49,7 +49,7 @@ const ProductsAll = () => {
   const [data, setData] = useState([]);
 
   // pagination setup
-  const [resultsPerPage, setResultsPerPage] = useState(10);
+  const [resultsPerPage, setResultsPerPage] = useState(20);
   const totalResults = products.length;
 
   // pagination change control
@@ -58,24 +58,27 @@ const ProductsAll = () => {
   }
 
   useEffect(() => {
-    const getProducts = async () => {
+    const getAllProducts = async () => {
       setLoading(true);
       try {
-        const querySnapshot = await getDocs(collection(db, "products"));
-        const productsArray = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setProducts(productsArray);
-        setFilter(productsArray);
+        const querySnapshot = await getDocs(collection(db, "categories"));
+        const allProducts = querySnapshot.docs.flatMap(doc => {
+          const data = doc.data();
+          return data.products ? data.products : [];
+        });
+
+        const sortedProducts = allProducts.sort((a, b) => b.id - a.id);
+
+        setProducts(sortedProducts);
+        setFilter(sortedProducts);
       } catch (error) {
-        console.error("Error fetching products:", error);
+        console.error("Error fetching all category products:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    getProducts();
+    getAllProducts();
   }, []);
 
   // on page change, load new sliced data
@@ -298,7 +301,7 @@ const ProductsAll = () => {
         </>
       ) : (
         <>
-          {/* Car list */}
+          {/* Product list */}
           <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 mb-8">
             {data.map((product) => (
               <div className="" key={product.id}>
@@ -307,6 +310,7 @@ const ProductsAll = () => {
                     className="object-cover w-full"
                     src={product.image}
                     alt="product"
+                    style={{ height: "250px", maxWidth: "250px" }}
                   />
                   <CardBody>
                     <div className="mb-3 flex items-center justify-between">
