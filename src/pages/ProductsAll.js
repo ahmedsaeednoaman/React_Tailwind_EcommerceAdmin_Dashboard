@@ -33,14 +33,17 @@ import {
 import response from "../utils/demo/productData";
 import Icon from "../components/Icon";
 import { genRating } from "../utils/genarateRating";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, getFirestore, doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase/firebaseConfig";
+
+
 
 
 const ProductsAll = () => {
   const [products, setProducts] = useState([]);
   const [filter, setFilter] = useState(products);
   const [loading, setLoading] = useState(false);
+  const [refetch, setRefetch] = useState(false);
 
   const [view, setView] = useState("grid");
 
@@ -79,7 +82,7 @@ const ProductsAll = () => {
     };
 
     getAllProducts();
-  }, []);
+  }, [refetch]);
 
   // on page change, load new sliced data
   // here you would make another server request for new data
@@ -90,14 +93,36 @@ const ProductsAll = () => {
   // Delete action model
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDeleteProduct, setSelectedDeleteProduct] = useState(null);
-  async function openModal(productId) {
-    let product = await data.filter((product) => product.id === productId)[0];
-    // console.log(product);
+  function openModal(productId) {
+    let product = data.filter((product) => product.id === productId)[0];
     setSelectedDeleteProduct(product);
     setIsModalOpen(true);
   }
 
   function closeModal() {
+    setIsModalOpen(false);
+  }
+
+  async function deleteProduct() {
+    const productId = selectedDeleteProduct.id;
+    const categoryName = selectedDeleteProduct.category;
+
+    const categoryRef = doc(db, "categories", categoryName);
+
+    const categorySnap = await getDoc(categoryRef);
+    if (!categorySnap.exists()) {
+      console.log("Category does not exist!");
+      return;
+    }
+
+    const data = categorySnap.data();
+    const currentProducts = data.products || [];
+
+    const updatedProducts = currentProducts.filter(product => product.id !== productId);
+
+    await updateDoc(categoryRef, { products: updatedProducts });
+
+    setRefetch(prev => !prev);
     setIsModalOpen(false);
   }
 
@@ -110,8 +135,6 @@ const ProductsAll = () => {
       setView("list");
     }
   };
-
-  console.log("data", data);
 
   return (
     <div>
@@ -171,14 +194,6 @@ const ProductsAll = () => {
                 </div>
               </Label>
             </div>
-            <div className="">
-              <Button
-                icon={view === "list" ? ListViewIcon : GridViewIcon}
-                className="p-2"
-                aria-label="Edit"
-                onClick={handleChangeView}
-              />
-            </div>
           </div>
         </CardBody>
       </Card>
@@ -192,8 +207,8 @@ const ProductsAll = () => {
           {/* </div> */}
         </ModalHeader>
         <ModalBody>
-          Make sure you want to delete product{" "}
-          {selectedDeleteProduct && `"${selectedDeleteProduct.name}"`}
+          Are you sure that you want to delete product: {" "}
+          {selectedDeleteProduct && `"${selectedDeleteProduct.title}"`} ?
         </ModalBody>
         <ModalFooter>
           {/* I don't like this approach. Consider passing a prop to ModalFooter
@@ -207,7 +222,7 @@ const ProductsAll = () => {
             </Button>
           </div>
           <div className="hidden sm:block">
-            <Button>Delete</Button>
+            <Button onClick={deleteProduct} >Delete</Button>
           </div>
           <div className="block w-full sm:hidden">
             <Button block size="large" layout="outline" onClick={closeModal}>
@@ -215,7 +230,7 @@ const ProductsAll = () => {
             </Button>
           </div>
           <div className="block w-full sm:hidden">
-            <Button block size="large">
+            <Button block size="large" onClick={deleteProduct}>
               Delete
             </Button>
           </div>
@@ -271,12 +286,6 @@ const ProductsAll = () => {
                             aria-label="Preview"
                           />
                         </Link>
-                        <Button
-                          icon={EditIcon}
-                          className="mr-3"
-                          layout="outline"
-                          aria-label="Edit"
-                        />
                         <Button
                           icon={TrashIcon}
                           layout="outline"
@@ -339,13 +348,6 @@ const ProductsAll = () => {
                         </Link>
                       </div>
                       <div>
-                        <Button
-                          icon={EditIcon}
-                          className="mr-3"
-                          layout="outline"
-                          aria-label="Edit"
-                          size="small"
-                        />
                         <Button
                           icon={TrashIcon}
                           layout="outline"
